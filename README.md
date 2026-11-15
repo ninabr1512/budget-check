@@ -12,8 +12,10 @@ A concept prototype by Nina Briantseva, not affiliated with ESTO.
 - `demo.html` + `demo.js`: a neutral loan calculator with the entry button. It shows the full flow: calculator → button → budget check with the amount and term passed in the link.
 - `statement.js`: bank statement import. Parses CSV in the browser, finds the date/amount/debit-credit columns by header name (Estonian, English, Russian), sorts spending into categories by keywords (whole-word match: "esto" does not match "restoran"), turns totals into monthly averages and leaves out transfers between your own accounts.
 - `xlsx.js` + `vendor/fflate.min.js`: Excel (.xlsx) import. An .xlsx file is a ZIP of XML files: fflate (MIT, 33 KB, self-hosted) unzips it in the browser, and a small reader takes the first sheet. A self-written reader instead of SheetJS: the npm version of SheetJS (0.18.5) has known vulnerabilities, and loading it from a CDN would break the "no external requests" rule.
+- `pdfimport.js` + `vendor/pdfjs/`: PDF import (beta). pdf.js (Mozilla, Apache-2.0, self-hosted) extracts text with x/y positions in the browser; `pdfimport.js` rebuilds the table: lines by baseline, columns by the header's x positions (right-aligned amounts by their right edge), wrapped descriptions joined to their row, amounts glued to text split off. Without a recognisable header it reads "date … amount" lines, but only if amounts carry a sign or D/K; otherwise it refuses instead of guessing. Scanned PDFs (no text) get a clear message.
 - `sample.js` / `sample-statement.csv`: a fictional Swedbank-style statement (3 months) for the "try a sample" button.
 - `photo.jpg`: photo by Gustavo Fring, Pexels.
+- `tests.js`, `tests-pdf.mjs`: run `npm install` once, then `npm test` (pdf.js in its Node build is a dev dependency; the site itself has no build step).
 - `tests.js`: edge-case tests for the logic. Run them with `node tests.js`.
 
 No backend. Everything runs in the browser, so the line "we don't collect or store anything" is literally true.
@@ -70,13 +72,13 @@ UI (checked manually): iPhone SE width, desktop, inline errors, a sticky result 
 
 ## Bank statement import: how it works
 
-1. The user uploads a CSV or Excel (.xlsx) file, or drags it in. Max 5 MB. Old `.xls` and PDF get a clear message asking for CSV/Excel. The file is read with FileReader and never leaves the browser.
+1. The user uploads a CSV or Excel (.xlsx) file, or drags it in. Max 5 MB. PDF is beta (up to 60 pages, 20 MB). Old `.xls` gets a clear message asking for CSV/Excel. The file is read with FileReader and never leaves the browser.
 2. Excel: the first sheet is read, and Excel date numbers are converted to dates. CSV: the text is decoded as UTF-8; if that gives broken characters, it is decoded again as windows-1257 (Baltic encoding).
 3. Non-transaction rows (opening/closing balance, turnover) are skipped.
 4. Spending is grouped by payee, with a suggested category for each payee. The user can change any category or choose "Don't count".
 5. "Fill in the form" fills the fields, adding chip fields (phone, subscriptions…) where needed. The user can still edit everything.
 
-Known limits: tested on sample files built from typical export formats, not yet on real exports from every bank. The keyword list covers common Estonian merchants only.
+Known limits: tested on sample files built from typical export formats, not yet on real exports from every bank. PDF layouts differ the most between banks, so PDF stays marked as beta in the UI. The keyword list covers common Estonian merchants only.
 
 ## Next
 

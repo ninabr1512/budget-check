@@ -1,0 +1,11 @@
+{
+  "name": "budget-check",
+  "private": true,
+  "description": "Concept prototype: does a loan payment fit your budget? Static site, no backend.",
+  "scripts": {
+    "test": "node tests.js && node tests-pdf.mjs"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "6.5.438"
+  }
+}

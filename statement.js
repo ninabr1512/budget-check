@@ -217,7 +217,8 @@
 
     var list = order.map(function (k) { return groups[k]; })
       .sort(function (a, b) { return b.total - a.total; })
-      .map(function (g) { g.monthly = round2(Math.max(0, g.total) / months); g.total = round2(g.total); return g; });
+      // A refund group can be negative; it then lowers its category total (never below 0, see totalsByCategory).
+      .map(function (g) { g.monthly = round2(g.total / months); g.total = round2(g.total); return g; });
 
     return {
       ok: true, count: tx.length, months: months,
@@ -234,6 +235,7 @@
       if (g.category === 'ignore') return;
       t[g.category] = round2((t[g.category] || 0) + g.monthly);
     });
+    Object.keys(t).forEach(function (k) { if (t[k] < 0) t[k] = 0; });
     return t;
   }
 

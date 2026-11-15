@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; worker-src 'self'; form-action 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Will this payment fit my budget? — concept prototype</title>
@@ -61,12 +61,16 @@
   @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
   /* Bank statement import */
-  .import { border: 1.5px dashed #c9d2e3; border-radius: 20px; padding: 20px 22px; margin-bottom: 28px; transition: border-color .15s, background .15s; }
+  .import { position: relative; border: 1.5px dashed #c9d2e3; border-radius: 20px; padding: 20px 22px; margin-bottom: 28px; transition: border-color .15s, background .15s; }
   .import.drag { border-color: var(--accent); background: var(--accent-soft); }
   .import-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
   .btn-import { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 14px; padding: 12px 18px;
     background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
   .btn-import:hover { background: #e2e8fe; }
+  /* The real file input stays in the page (visually hidden, still focusable): the label opens it natively.
+     No "accept" filter on purpose: iOS greys out .csv files when it is set. The type is checked in app.js. */
+  .file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+  .file-input:focus-visible + .btn-import { outline: 3px solid rgba(76,110,245,.3); outline-offset: 2px; }
   .btn-import:focus-visible, .link-btn:focus-visible, .btn:focus-visible { outline: 3px solid rgba(76,110,245,.3); outline-offset: 2px; }
   .link-btn { border: 0; background: none; padding: 0; font: inherit; font-size: 15px; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
   .import-note { font-size: 14px; color: var(--muted); margin: 12px 0 0; }
@@ -178,6 +182,7 @@
 
   .small { margin-top: 48px; font-size: 13px; color: var(--muted); max-width: 760px; }
   .small p { margin: 0 0 8px; }
+  .ver { opacity: .7; }
 
   /* Sticky summary while the result is off-screen */
   .peek[hidden] { display: none; }
@@ -214,13 +219,13 @@
       <h2 id="budget-h">Your month</h2>
       <div class="import" id="import">
         <div class="import-row">
-          <button type="button" class="btn-import" id="import-btn">
+          <input type="file" id="file" class="file-input">
+          <label for="file" class="btn-import" id="import-btn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 20h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             Upload bank statement
-          </button>
+          </label>
         </div>
-        <p class="import-note">We'll sort your spending into the fields below. CSV or Excel (.xlsx) export from Swedbank, SEB, LHV and others. The file is read on your device and never uploaded.</p>
-        <input type="file" id="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+        <p class="import-note">We'll sort your spending into the fields below. CSV, Excel (.xlsx) or PDF (beta) from Swedbank, SEB, LHV and others. The file is read on your device and never uploaded.</p>
         <div class="import-msg" id="import-msg" role="status" aria-live="polite"></div>
         <div class="review" id="review" hidden></div>
       </div>
@@ -242,7 +247,7 @@
 
     <div class="small">
       <p>For your own budget planning only. This tool does not affect any credit decision and is not financial advice — the lender makes its own creditworthiness assessment.</p>
-      <p>Concept prototype by Nina Briantseva — not affiliated with ESTO. <a href="demo.html" style="color:inherit">See it in a loan calculator flow →</a></p>
+      <p>Concept prototype by Nina Briantseva — not affiliated with ESTO. <span class="ver">v1.4</span> <a href="demo.html" style="color:inherit">See it in a loan calculator flow →</a></p>
     </div>
   </main>
 
@@ -257,6 +262,7 @@
 <script src="statement.js"></script>
 <script src="vendor/fflate.min.js"></script>
 <script src="xlsx.js"></script>
+<script src="pdfimport.js"></script>
 <script src="sample.js"></script>
 <script src="app.js"></script>
 </body>

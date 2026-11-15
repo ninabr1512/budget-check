@@ -6,7 +6,10 @@
 - `swedbank_validation_2026-08_10.xlsx`: the same data as Excel, with real date/number cells and title rows above the header
 - `english_signed_2026-08_10.xlsx`: English headers, signed amounts (no D/K column), plus a second sheet that must be ignored
 
-All four files must give exactly the same result.
+- `swedbank_validation_2026-08_10.pdf`: a table-style PDF (header on every page, right-aligned amounts, wrapped descriptions, page footers)
+- `signed_lines_2026-08_10.pdf`: a PDF without column headers, one line per transaction, signed amounts
+
+All six files must give the same result (PDF: within 5 cents because of rounding when summing monthly averages).
 
 **Data**
 - Fictional data for August to October 2026: 113 transactions. The account number is not real.
@@ -54,6 +57,13 @@ With the default loan (2000 €, 36 months, 14.15%, 6 € fee → 74.50 €/mont
 - Tip: "Your current costs and loans already leave little room…" (no longer term or smaller amount can reach the green zone)
 
 ## Bugs this file found (fixed)
+
+PDF work found three more:
+3. pdf.js returned a long description and the amount next to it as one piece of text ("…MUSTAMAE23,40"); the transaction was lost. Now the amount is split off.
+4. A refund whose payee name differs slightly from the purchase ("SELVER AS · Tagastus" vs "SELVER AS · Kaardimakse") was dropped instead of lowering Food. Now refunds lower the category total.
+5. After a broken PDF, the next PDF hung on "Reading PDF…" because pdf.js kept the failed document open. Now every document is closed after reading, with a 30-second timeout.
+
+Earlier:
 
 1. A refund from a shop was counted as income, and spending in that shop did not go down.
 2. "Restoran Esto-Kohvik" was categorised as a loan payment, because the keyword "esto" matched the start of the word.

@@ -267,7 +267,10 @@
     too_big: 'The file is too large (max 5 MB).',
     wrong_type: 'Please choose a CSV or Excel (.xlsx) file.',
     old_xls: 'This is an old Excel format (.xls). Please open it and save as .xlsx or CSV, or download CSV from your bank.',
-    pdf: 'PDF statements are not supported yet. Please download the CSV or Excel export from your internet bank.',
+    pdf_no_text: 'This PDF has no text — it is probably a scan. Please download the CSV or Excel export from your bank.',
+    pdf_no_sign: "We found transactions, but this PDF doesn't show which are money in and which are money out. Please use the CSV or Excel export.",
+    pdf_locked: 'This PDF is password-protected. Please download it without a password, or use CSV or Excel.',
+    pdf_bad: "We couldn't read this PDF. Please use the CSV or Excel export.",
     xlsx_bad: "We couldn't read this Excel file. Try the CSV export instead.",
     read: "We couldn't read this file."
   };
@@ -282,12 +285,20 @@
     var isXlsx = /\.xlsx$/.test(name);
     var isCsv = /\.csv$/.test(name) || /^text\/(csv|comma-separated-values)$/.test(file.type);
     if (/\.xls$/.test(name)) return importMsg(IMPORT_ERR.old_xls, 'error');
-    if (/\.pdf$/.test(name) || file.type === 'application/pdf') return importMsg(IMPORT_ERR.pdf, 'error');
-    if (!isXlsx && !isCsv) return importMsg(IMPORT_ERR.wrong_type, 'error');
-    if (file.size > S.MAX_BYTES) return importMsg(IMPORT_ERR.too_big, 'error');
+    var isPdf = /\.pdf$/.test(name) || file.type === 'application/pdf';
+    if (!isXlsx && !isCsv && !isPdf) return importMsg(IMPORT_ERR.wrong_type, 'error');
+    if (isPdf && file.size > 20 * 1024 * 1024) return importMsg(IMPORT_ERR.too_big, 'error');
+    if (!isPdf && file.size > S.MAX_BYTES) return importMsg(IMPORT_ERR.too_big, 'error');
     var reader = new FileReader();
     reader.onerror = function () { importMsg(IMPORT_ERR.read, 'error'); };
     reader.onload = function () {
+      if (isPdf) {
+        importMsg('Reading PDF…');
+        return window.PdfImport.read(reader.result).then(function (x) {
+          if (!x.ok) { $('review').hidden = true; return importMsg(IMPORT_ERR[x.error] || IMPORT_ERR.pdf_bad, 'error'); }
+          showResult(S.analyseRows(x.rows), 'pdf');
+        });
+      }
       if (isXlsx) {
         var x = window.Xlsx.read(reader.result);
         if (!x.ok) { $('review').hidden = true; return importMsg(IMPORT_ERR[x.error] || IMPORT_ERR.read, 'error'); }
@@ -305,7 +316,9 @@
 
   function analyseText(text) { showResult(S.analyse(text)); }
 
-  function showResult(r) {
+  var source = null;
+  function showResult(r, from) {
+    source = from || null;
     if (!r.ok) { $('review').hidden = true; return importMsg(IMPORT_ERR[r.error] || IMPORT_ERR.read, 'error'); }
     importMsg('');
     current = r; showAll = false; detailsOpen = false;
@@ -322,7 +335,8 @@
     var opts = function (sel) { return CATS.map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === sel ? ' selected' : '') + '>' + c[1] + '</option>'; }).join(''); };
     el.innerHTML =
       '<div class="rv-head"><div><strong><span class="ok-check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="m5 12.5 4.5 4.5L19 7.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Filled in from your statement</strong>' +
-        '<p class="meta">' + r.count + ' transactions over ' + r.months + ' month' + (r.months === 1 ? '' : 's') + ' · monthly averages</p></div>' +
+        '<p class="meta">' + r.count + ' transactions over ' + r.months + ' month' + (r.months === 1 ? '' : 's') + ' · monthly averages' +
+        (source === 'pdf' ? ' · <strong>PDF (beta): please check the numbers</strong>' : '') + '</p></div>' +
         '<button type="button" class="btn-edit" id="rv-toggle" aria-expanded="' + detailsOpen + '" aria-controls="rv-details">' +
         PENCIL + (detailsOpen ? 'Hide details' : 'Review and adjust') + CHEV + '</button></div>' +
       '<div class="rv-details" id="rv-details"' + (detailsOpen ? '' : ' hidden') + '>' +
