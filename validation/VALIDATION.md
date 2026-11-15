@@ -3,6 +3,10 @@
 **Files**
 - `swedbank_validation_2026-08_10.csv`: UTF-8
 - `swedbank_validation_2026-08_10_windows1257.csv`: the same data in the Baltic Windows encoding
+- `swedbank_validation_2026-08_10.xlsx`: the same data as Excel, with real date/number cells and title rows above the header
+- `english_signed_2026-08_10.xlsx`: English headers, signed amounts (no D/K column), plus a second sheet that must be ignored
+
+All four files must give exactly the same result.
 
 **Data**
 - Fictional data for August to October 2026: 113 transactions. The account number is not real.
