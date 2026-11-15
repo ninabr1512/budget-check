@@ -279,7 +279,8 @@
     if (!file) return;
     $('review').hidden = true;
     var name = file.name.toLowerCase();
-    var isXlsx = /\.xlsx$/.test(name), isCsv = /\.csv$/.test(name) || file.type === 'text/csv';
+    var isXlsx = /\.xlsx$/.test(name);
+    var isCsv = /\.csv$/.test(name) || /^text\/(csv|comma-separated-values)$/.test(file.type);
     if (/\.xls$/.test(name)) return importMsg(IMPORT_ERR.old_xls, 'error');
     if (/\.pdf$/.test(name) || file.type === 'application/pdf') return importMsg(IMPORT_ERR.pdf, 'error');
     if (!isXlsx && !isCsv) return importMsg(IMPORT_ERR.wrong_type, 'error');
@@ -351,7 +352,7 @@
     render();
   }
 
-  $('import-btn').addEventListener('click', function () { $('file').click(); });
+  // The upload button is a <label for="file">, so the browser opens the picker itself (reliable on iOS).
   $('file').addEventListener('change', function (e) { handleFile(e.target.files[0]); e.target.value = ''; });
   // Hidden helper for reviewers: index.html?sample=1 loads a fictional statement.
   if (/[?&]sample=1/.test(window.location.search) && window.SAMPLE_STATEMENT) analyseText(window.SAMPLE_STATEMENT);
