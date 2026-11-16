@@ -30,7 +30,7 @@
   // Categories map to form fields. Order matters: the first rule that matches wins.
   // A keyword must start a word: "esto" matches "ESTO AS", but not "restoran".
   var RULES = [
-    { cat: 'ignore',    words: ['oma kontode', 'own account', 'between own accounts', 'между своими счетами', 'перевод между счетами', 'starp saviem kontiem', 'hoius', 'investeer', 'kogumispension', 'bondora', 'go&grow', 'trade republic', 'lightyear', 'mintos', 'funderbeam', 'investment'] },
+    { cat: 'ignore',    words: ['oma kontode', 'own account', 'between own accounts', 'между своими счетами', 'перевод между счетами', 'starp saviem kontiem', 'hoius', 'investeer', 'kogumispension'] },
     { cat: 'debts',     words: ['esto as', 'esto.ee', 'inbank', 'bigbank', 'holm bank', 'tf bank', 'laen', 'liising', 'krediit', 'loan', 'järelmaks', 'kodulaen'] },
     { cat: 'food',      words: [
       // groceries
@@ -49,6 +49,11 @@
     { cat: 'x_pets',    words: ['lemmikloom', 'zoo', 'veterinaar', 'loomakliinik', 'petcity'] },
     { cat: 'x_kids',    words: ['lasteaed', 'kindergarten', 'huvikool', 'lastehoid', 'school'] }
   ];
+  // Investment platforms: money sent there counts as a monthly cost (category Other),
+  // money coming back from them is not income (it is your own money returning).
+  var INVEST = { cat: 'other', words: ['bondora', 'go&grow', 'trade republic', 'lightyear', 'mintos', 'funderbeam', 'robocash',
+    'estateguru', 'revolut trading', 'interactive brokers', 'degiro', 'swedbank robur', 'investment', 'investeering'] };
+  RULES.splice(1, 0, INVEST);   // right after "ignore", before loans: "Bondora" must not land in Current loans
   RULES.forEach(function (r) {
     r.re = r.words.map(function (w) {
       return new RegExp('(^|[^\\p{L}\\d])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'u');
@@ -161,6 +166,11 @@
     }
   }
 
+  function isInvestment(text) {
+    var t = norm(text);
+    return INVEST.re.some(function (re) { return re.test(t); });
+  }
+
   function categorize(text) {
     var t = norm(text);
     for (var i = 0; i < RULES.length; i++) {
@@ -231,8 +241,8 @@
     // reduces spending there; everything else counts as income.
     tx.forEach(function (t) {
       if (t.expense) return;
-      var cat = categorize(t.payee + ' ' + t.desc);
-      if (cat === 'ignore') return;
+      var text = t.payee + ' ' + t.desc, cat = categorize(text);
+      if (cat === 'ignore' || isInvestment(text)) return;
       var known = groups[norm(t.payee || t.desc.slice(0, 40))];
       if (known || (cat !== 'other' && t.payee)) {
         var g = group(t, cat);

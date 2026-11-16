@@ -184,8 +184,21 @@
     return ok ? b : null;
   }
 
-  var touchedIncome = false, hasResult = false, resultVisible = false;
-  function updatePeek() { $('peek').hidden = !hasResult || resultVisible; }
+  var touchedIncome = false, hasResult = false, resultVisible = false, typing = false;
+  // The summary bar stays out of the way while the user types (on phones it would cover the field above the keyboard).
+  function updatePeek() { $('peek').hidden = !hasResult || resultVisible || typing; }
+  document.addEventListener('focusin', function (e) { if (/^(INPUT|SELECT)$/.test(e.target.tagName)) { typing = true; updatePeek(); } });
+  document.addEventListener('focusout', function () { setTimeout(function () {
+    var el = document.activeElement; typing = !!el && /^(INPUT|SELECT)$/.test(el.tagName); updatePeek(); }, 0); });
+
+  /** The number that actually decides the zone: what's left, or the share going to debts. */
+  function limitingFactor(a) {
+    var T = L.THRESHOLDS;
+    var byDebts = a.dsti > T.DSTI_RISK ? 3 : a.dsti > T.DSTI_EU ? 2 : a.dsti > T.DSTI_COMFORT ? 1 : 0;
+    var byLeft = a.leftover < 0 ? 4 : a.leftoverPct < T.LEFT_RISK ? 3 : a.leftoverPct < T.LEFT_COMFORT ? 1 : 0;
+    if (a.leftover < 0) return eur0.format(-a.leftover) + ' short each month';
+    return byLeft >= byDebts ? eur0.format(a.leftover) + ' left (' + pct(a.leftoverPct) + ')' : pct(a.dsti) + ' to debts';
+  }
   if ('IntersectionObserver' in window) {
     new IntersectionObserver(function (e) { resultVisible = e[0].isIntersecting; updatePeek(); }, { threshold: 0.25 })
       .observe($('result-card'));
@@ -210,18 +223,23 @@
 
     hasResult = true; updatePeek();
     peek.style.background = color;
-    peek.innerHTML = '<span>' + z.title + ' · ' + pct(a.dsti) + ' to debts</span><span>See result ↓</span>';
+    peek.innerHTML = '<span>' + z.title + ' · ' + limitingFactor(a) + '</span><span>See result ↓</span>';
 
     var tips = [], sug = null;
     if (a.living === 0 && a.debts === 0) {
       tips.push('<strong>No costs entered yet.</strong> Add at least rent, food and transport — otherwise the result looks better than it is.');
     } else if (a.zone !== 'comfortable') {
+      // One suggestion only. Borrowing less comes first: a longer term also works, but costs more interest.
       var s = sug = L.suggestions(budget, loan);
-      if (s.longerTerm) tips.push('Over <strong>' + s.longerTerm.term + ' months</strong> the payment would be ' + eur.format(s.longerTerm.payment) + ' — comfortable, though you pay more interest in total.' +
-        '<button type="button" class="tip-action" data-term="' + s.longerTerm.term + '">Use ' + s.longerTerm.term + ' months</button>');
-      if (s.maxAmount > 0 && s.maxAmount < loan.amount) tips.push('To stay comfortable over ' + loan.term + ' months, borrow up to <strong>' + eur0.format(s.maxAmount) + '</strong>.' +
-        '<button type="button" class="tip-action" data-amount="' + s.maxAmount + '">Use this amount</button>');
-      if (!s.longerTerm && !(s.maxAmount > 0)) tips.push('Your current costs and loans already leave little room. Lowering them would help more than changing this loan.');
+      if (s.maxAmount > 0 && s.maxAmount < loan.amount) {
+        tips.push('To stay comfortable over ' + loan.term + ' months, borrow up to <strong>' + eur0.format(s.maxAmount) + '</strong>.' +
+          '<br><button type="button" class="tip-action" data-amount="' + s.maxAmount + '">Borrow ' + eur0.format(s.maxAmount) + ' instead</button>');
+      } else if (s.longerTerm) {
+        tips.push('Over <strong>' + s.longerTerm.term + ' months</strong> the payment drops to ' + eur.format(s.longerTerm.payment) + ' — comfortable, though you pay more interest in total.' +
+          '<br><button type="button" class="tip-action" data-term="' + s.longerTerm.term + '">Switch to ' + s.longerTerm.term + ' months</button>');
+      } else {
+        tips.push('Your current costs and loans already leave little room. Lowering them would help more than changing this loan.');
+      }
     }
 
     if (budget.savings > 0 && a.leftover >= 0) {
@@ -322,6 +340,9 @@
   var source = null;
   function showResult(r, from) {
     source = from || null;
+    var loaded = !!(r && r.ok);
+    $('import').classList.toggle('has-file', loaded);
+    $('import-label').textContent = loaded ? 'Upload a different file' : 'Upload bank statement';
     if (!r.ok) {
       $('review').hidden = true;
       var msg = IMPORT_ERR[r.error] || IMPORT_ERR.read;
@@ -342,11 +363,11 @@
     var limit = showAll ? r.groups.length : 12;
     var opts = function (sel) { return CATS.map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === sel ? ' selected' : '') + '>' + c[1] + '</option>'; }).join(''); };
     el.innerHTML =
-      '<div class="rv-head"><div><strong><span class="ok-check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="m5 12.5 4.5 4.5L19 7.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Filled in from your statement</strong>' +
+      '<div class="rv-head"><div><strong><span class="ok-check" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m4.5 12.5 5 5L19.5 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Filled in from your statement</strong>' +
         '<p class="meta">' + r.count + ' transactions over ' + r.months + ' month' + (r.months === 1 ? '' : 's') + ' · monthly averages' +
         (source === 'pdf' ? ' · <strong>PDF (beta): please check the numbers</strong>' : '') + '</p></div>' +
         '<button type="button" class="btn-edit" id="rv-toggle" aria-expanded="' + detailsOpen + '" aria-controls="rv-details">' +
-        PENCIL + (detailsOpen ? 'Hide details' : 'Review and adjust') + CHEV + '</button></div>' +
+        (detailsOpen ? 'Hide details' : PENCIL + 'Review and adjust') + CHEV + '</button></div>' +
       '<div class="rv-details" id="rv-details"' + (detailsOpen ? '' : ' hidden') + '>' +
         '<p class="meta">Change a category if something landed in the wrong place — the form updates right away.</p>' +
         '<div class="rv-income"><span>Money in</span><strong>' + eur0.format(r.income) + ' / month</strong></div>' +
