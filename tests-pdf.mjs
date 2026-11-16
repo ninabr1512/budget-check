@@ -24,7 +24,8 @@ async function items(file) {
 }
 
 const ref = S.analyse(fs.readFileSync('validation/swedbank_validation_2026-08_10.csv', 'utf8'));
-for (const [f, mode] of [['validation/swedbank_validation_2026-08_10.pdf', 'table'], ['validation/signed_lines_2026-08_10.pdf', 'lines']]) {
+for (const [f, mode] of [['validation/swedbank_validation_2026-08_10.pdf', 'table'], ['validation/signed_lines_2026-08_10.pdf', 'lines'],
+                         ['validation/swedbank_english_layout_2026-08_10.pdf', 'table']]) {
   const r = P.itemsToRows(await items(f));
   const a = r.ok ? S.analyseRows(r.rows) : {};
   eq(f + ' read as ' + mode, r.ok && r.mode === mode, JSON.stringify(r.error || r.mode));

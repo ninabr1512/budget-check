@@ -99,10 +99,14 @@ eq('date: 31.01.2026', +S.parseDate('31.01.2026'), Date.UTC(2026, 0, 31));
 eq('date: 2026-01-31', +S.parseDate('2026-01-31'), Date.UTC(2026, 0, 31));
 eq('date: 31.02.2026 invalid', S.parseDate('31.02.2026'), null);
 eq('category: ESTO → debts', S.categorize('ESTO AS'), 'debts');
-eq('category: restoran is not ESTO', S.categorize('Restoran Kohvik'), 'other');
+eq('category: restoran is not ESTO (it is food)', S.categorize('Restoran Kohvik'), 'food');
 eq('category: Bolt Food → food, Bolt ride → transport', [S.categorize('Bolt Food'), S.categorize('BOLT.EU/R/1')], ['food', 'transport']);
 eq('category: Estonian letters (üür)', S.categorize('Korteri üür'), 'housing');
 eq('category: Elektrilevi → utilities', S.categorize('Elektrilevi OÜ'), 'utilities');
+eq('investment platforms → Other (not loans, not ignored)', ['BONDORA CAPITAL OÜ', 'TRADE REPUBLIC BANK GMBH', 'Lightyear Europe AS'].map(S.categorize), ['other', 'other', 'other']);
+eq('money back from an investment platform is not income', (function () {
+  const r = S.analyse('Kuupäev;Saaja/Maksja;Selgitus;Summa;Deebet/Kreedit\n01.09.2026;Tööandja OÜ;Palk;1000,00;K\n02.09.2026;BONDORA CAPITAL OÜ;Go&Grow;200,00;D\n20.09.2026;Go&Grow OÜ;Väljamakse;150,00;K\n');
+  return [r.income, r.totals.other]; })(), [1000, 200]);
 eq('category: own transfer ignored', S.categorize('Oma kontode vaheline ülekanne'), 'ignore');
 
 const sample = S.analyse(fs.readFileSync(__dirname + '/sample-statement.csv', 'utf8'));
@@ -122,7 +126,11 @@ eq('russian headers', S.analyse(ru).totals.food, 30);
 eq('refund from a shop reduces spending, not income', (function () {
   const r = S.analyse('Kuupäev;Saaja/Maksja;Summa;Deebet/Kreedit\n01.09.2026;Tööandja OÜ;1000,00;K\n02.09.2026;SELVER AS;50,00;D\n03.09.2026;SELVER AS;10,00;K\n');
   return [r.income, r.totals.food]; })(), [1000, 40]);
-eq('category: "Restoran Esto-Kohvik" is not a loan', S.categorize('Restoran Esto-Kohvik'), 'other');
+eq('category: "Restoran Esto-Kohvik" is not a loan', S.categorize('Restoran Esto-Kohvik'), 'food');
+eq('category: cafés, restaurants and grocery shops → food',
+   ['KATHARINENTHAL 10127', 'CAFFEINE KOHVIK 10111 TALLINN', 'GOURMETCOFFEEKADRIORG 1', 'Chou Chou 10126 Tallinn', 'SOLARISE TOIDUPOOD 10143 TALLINN'].map(S.categorize),
+   ['food', 'food', 'food', 'food', 'food']);
+eq('category: "kohvik" as a word inside a street name does not break other rules', S.categorize('Elektrilevi OÜ'), 'utilities');
 eq('import: empty file', S.analyse('').error, 'empty');
 eq('import: one line only', S.analyse('just text').error, 'not_csv');
 eq('import: unknown columns', S.analyse('foo;bar\n1;2\n').error, 'unknown_format');
@@ -140,6 +148,34 @@ for (const f of ['swedbank_validation_2026-08_10.xlsx', 'english_signed_2026-08_
 eq('xlsx: Excel date serial 46235 → 1 Aug 2026', +S.parseDate('46235'), Date.UTC(2026, 7, 1));
 eq('xlsx: random bytes → xlsx_bad', X.read(new Uint8Array([1, 2, 3, 4, 5])).error, 'xlsx_bad');
 eq('xlsx: text file renamed to .xlsx → xlsx_bad', X.read(Buffer.from('Kuupäev;Summa\n01.01.2026;5')).error, 'xlsx_bad');
+
+// --- File type by content, encodings, HTML tables
+const ref2 = S.analyse(fs.readFileSync(__dirname + '/validation/swedbank_validation_2026-08_10.csv', 'utf8'));
+for (const f of ['swedbank_russian_windows1251.csv', 'html_table_saved_as.xls', 'csv_saved_as.xls']) {
+  const r = S.analyseBytes(new Uint8Array(fs.readFileSync(__dirname + '/validation/' + f)));
+  eq('bytes: ' + f + ' gives the same result as the reference CSV', [r.ok, r.income, r.totals], [true, ref2.income, ref2.totals]);
+}
+eq('sniff: PK → xlsx, %PDF → pdf, D0CF11E0 → old xls, text → text',
+   [S.sniff(Buffer.from('PK\x03\x04')), S.sniff(Buffer.from('%PDF-1.7')), S.sniff(Buffer.from('d0cf11e0a1b11ae1', 'hex')), S.sniff(Buffer.from('Kuupäev;Summa'))],
+   ['xlsx', 'pdf', 'xls', 'text']);
+eq('russian headers incl. "Дата операции" and "Пояснение"',
+   S.mapColumns([['Счёт клиента', 'Тип строки', 'Дата операции', 'Получатель/Плательщик', 'Пояснение', 'Сумма', 'Валюта', 'Дебет/Кредит']]),
+   { date: 2, amount: 5, dc: 7, payee: 3, desc: 4, rowtype: 1, headerRow: 0 });
+eq('unknown columns → the user sees their own column names',
+   S.analyse('Foo;Bar;Baz\n1;2;3\n').columns, ['Foo', 'Bar', 'Baz']);
+
+// --- Old binary Excel (.xls, BIFF8)
+const XL = require('./xls.js');
+for (const f of ['swedbank_validation_2026-08_10.xls', 'english_signed_libreoffice.xls']) {
+  const x = XL.read(fs.readFileSync(__dirname + '/validation/' + f));
+  const r = S.analyseRows(x.rows);
+  eq('xls: ' + f + ' gives the same result as CSV', [r.ok, r.income, r.totals], [true, ref2.income, ref2.totals]);
+}
+eq('xls: second sheet is ignored (first sheet only)', XL.read(fs.readFileSync(__dirname + '/validation/swedbank_validation_2026-08_10.xls')).rows.some(r => r.includes('ignore me')), false);
+eq('xls: Estonian letters from the shared strings', XL.read(fs.readFileSync(__dirname + '/validation/swedbank_validation_2026-08_10.xls')).rows[0][0], 'Konto väljavõte');
+const xlsBytes = fs.readFileSync(__dirname + '/validation/swedbank_validation_2026-08_10.xls');
+eq('xls: truncated file → error, no crash', XL.read(xlsBytes.subarray(0, 1500)).ok, false);
+eq('xls: OLE header followed by junk → xls_bad', XL.read(Buffer.concat([Buffer.from('d0cf11e0a1b11ae1', 'hex'), Buffer.alloc(600, 7)])).error, 'xls_bad');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
